@@ -634,7 +634,6 @@ export const userService = {
     })) || [];
 
     return { data: transformedData, error: null };
-  }
   },
 
   // Get workspace members
@@ -771,4 +770,3 @@ export const userService = {
     };
   }
 };
-}
