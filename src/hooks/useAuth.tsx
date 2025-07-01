@@ -300,6 +300,7 @@ export const useAuthState = (): AuthContextType => {
     // Members have basic permissions
     const memberPermissions = [
       'dashboard.view',
+        console.log('🔄 Setting auth state after getUser error');
       'boards.view',
       'clients.view'
     ];
@@ -311,6 +312,7 @@ export const useAuthState = (): AuthContextType => {
     if (!supabase) {
       console.log('❌ Supabase not configured');
       setAuthState(prev => ({ 
+        console.log('🔄 Setting auth state - no authenticated user');
         ...prev,
         loading: false,
         error: 'Supabase not configured'
@@ -319,20 +321,11 @@ export const useAuthState = (): AuthContextType => {
     }
 
     let isSubscribed = true;
+    let loadingTimeout: NodeJS.Timeout;
 
-    // Shorter timeout to prevent hanging
-    const loadingTimeout = setTimeout(() => {
-      if (isSubscribed) {
-        console.log('⏰ Loading timeout - setting loading to false');
-        setAuthState(prev => ({
-          ...prev, 
-          loading: false, 
-          error: prev.error || 'Authentication timeout'
-        }));
-      }
-    }, 5000); // 5 second timeout
 
     const initializeAuth = async () => {
+      console.log('🚀 Starting authentication initialization...');
       try {
         console.log('🔍 Checking existing session...');
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -340,6 +333,7 @@ export const useAuthState = (): AuthContextType => {
         if (error) {
           console.error('❌ Session check error:', error);
           if (isSubscribed) {
+            console.log('🔄 Setting auth state after session error');
             setAuthState({ 
               user: null, 
               loading: false,
@@ -352,11 +346,14 @@ export const useAuthState = (): AuthContextType => {
         
         if (session?.user) {
           console.log('✅ Existing session found for:', session.user.email);
+          console.log('🔄 Refreshing user data...');
           if (isSubscribed) {
             await refreshUser();
           }
         } else if (isSubscribed) {
           console.log('❌ No existing session');
+          console.log('🔄 Setting auth state - no session');
+          console.log('🔍 Fetching user profile from database...');
           if (isSubscribed) {
             setAuthState({ 
               user: null, 
@@ -373,6 +370,7 @@ export const useAuthState = (): AuthContextType => {
           console.log('🧹 Clearing invalid session...');
           await supabase.auth.signOut();
           if (isSubscribed) {
+            console.log('🔄 Setting auth state after clearing invalid session');
             setAuthState({ 
               user: null, 
               loading: false,
@@ -382,33 +380,75 @@ export const useAuthState = (): AuthContextType => {
           }
           return;
         }
+          } else {
+            console.log('⚠️ No user profile found in database, using minimal profile');
         if (isSubscribed) {
+          console.log('🔄 Setting auth state after initialization error');
           setAuthState({
             user: null, 
             loading: false, 
             error: error.message,
             currentWorkspaceId: null
+          console.log('🔍 Fetching user memberships...');
           });
         }
-      } finally {
-        clearTimeout(loadingTimeout);
       }
+      console.log('✅ Authentication initialization completed');
     };
 
-    initializeAuth();
+    // Set up loading timeout as fallback
+    loadingTimeout = setTimeout(() => {
+      if (isSubscribed) {
+        console.log('⏰ Loading timeout - forcing loading to false');
+        setAuthState(prev => ({
+          ...prev, 
+          loading: false, 
+          error: prev.error || 'Authentication timeout'
+          } else {
+            console.log('⚠️ No memberships found for user');
+        }));
+      }
+    }, 8000); // 8 second timeout
+
+    // Initialize auth and clear timeout when done
+    const runInitialization = async () => {
+      try {
+        await initializeAuth();
+      } catch (error) {
+        console.error('❌ Failed to initialize auth:', error);
+      } finally {
+          console.log('✅ Using default workspace ID:', currentWorkspaceId);
+        if (isSubscribed) {
+          console.log('🧹 Clearing loading timeout');
+          clearTimeout(loadingTimeout);
+        }
+          console.log('✅ Using first membership workspace ID:', currentWorkspaceId);
+        } else {
+          console.log('⚠️ No workspace ID available');
+      }
+    };
+    runInitialization();
     
+        console.log('🔄 Setting final auth state with user data');
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('🔄 Auth state change:', event, session?.user?.email);
-      clearTimeout(loadingTimeout);
+      
+      // Clear timeout on any auth state change
+      if (loadingTimeout) {
+        console.log('🧹 Clearing loading timeout due to auth state change');
+        clearTimeout(loadingTimeout);
+      }
       
       if (!isSubscribed) return;
       
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('✅ User signed in, refreshing profile...');
+        console.log('🔄 Refreshing user data after sign in...');
         await refreshUser();
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
+        console.log('🔄 Setting auth state after sign out');
         setAuthState({
           user: null, 
           loading: false, 
@@ -421,7 +461,9 @@ export const useAuthState = (): AuthContextType => {
       }
     });
 
+        console.log('🔄 Setting auth state with fallback user');
     return () => {
+      console.log('🧹 Cleaning up auth effect');
       isSubscribed = false;
       subscription.unsubscribe();
       clearTimeout(loadingTimeout);
@@ -429,8 +471,10 @@ export const useAuthState = (): AuthContextType => {
   }, []);
 
   return {
+      console.log('🔄 Setting auth state after refresh error');
     authState,
     signIn,
+      console.log('🔄 Setting auth state - Supabase not configured');
     signOut,
     refreshUser,
     hasPermission,
