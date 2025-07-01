@@ -403,11 +403,6 @@ export const useAuthState = (): AuthContextType => {
       clearTimeout(loadingTimeout);
       
       if (!isSubscribed) return;
-      // Handle any other authentication errors by clearing state
-      if (error.message?.includes('Invalid Refresh Token') || error.message?.includes('refresh_token_not_found')) {
-        console.log('🧹 Clearing invalid session due to exception...');
-        await supabase.auth.signOut();
-      }
       
       if (event === 'SIGNED_IN' && session?.user) {
         console.log('✅ User signed in, refreshing profile...');
@@ -415,25 +410,14 @@ export const useAuthState = (): AuthContextType => {
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
         setAuthState({
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('🔄 Token refreshed successfully');
-        // Don't refresh user on token refresh to avoid loops
-          user: null, 
-          loading: false, 
-          error: null, // Don't show refresh token errors to users
-          currentWorkspaceId: null 
-        });
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('🔄 Token refreshed');
-        // Don't refresh user on token refresh to avoid loops
-      } else if (event === 'SIGNED_OUT' || !session) {
-        console.log('🧹 Session cleared or invalid');
-        setAuthState({
           user: null, 
           loading: false, 
           error: null, 
           currentWorkspaceId: null 
         });
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        console.log('🔄 Token refreshed');
+        // Don't refresh user on token refresh to avoid loops
       }
     });
 
