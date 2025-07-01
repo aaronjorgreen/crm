@@ -686,7 +686,7 @@ export const userService = {
         ownerId: membership.workspace.owner_id,
         createdAt: membership.workspace.created_at
       } : undefined
-    })) : [];
+    })) ?? [];
 
     return { data: transformedData, error: null };
   },
