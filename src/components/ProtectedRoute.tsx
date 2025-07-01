@@ -1,7 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth.ts';
-import SupabaseDiagnostic from './SupabaseDiagnostic';
+import { useAuth } from '../hooks/useAuth';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -18,11 +17,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 }) => {
   const { authState, hasPermission } = useAuth();
 
-  // Show diagnostic if there's an auth error (likely connection issue)
-  if (authState.error && !authState.user && !authState.loading) {
-    return <SupabaseDiagnostic />;
-  }
-
   // Show loading state while checking auth
   if (authState.loading) {
     return (
@@ -31,22 +25,6 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-neutral-600 font-medium">Loading your workspace...</p>
           <p className="text-sm text-neutral-500 mt-2">Setting up your CRM environment...</p>
-          
-          {/* Enhanced Debug info */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg text-xs text-blue-700 text-left">
-            <p className="font-semibold mb-2">🔧 Debug Information:</p>
-            <div className="space-y-1">
-              <p><strong>Auth Loading:</strong> {authState.loading ? 'Yes' : 'No'}</p>
-              <p><strong>User Found:</strong> {authState.user ? 'Yes' : 'No'}</p>
-              <p><strong>User ID:</strong> {authState.user?.id || 'None'}</p>
-              <p><strong>User Email:</strong> {authState.user?.email || 'None'}</p>
-              <p><strong>User Role:</strong> {authState.user?.role || 'None'}</p>
-              <p><strong>Workspace ID:</strong> {authState.currentWorkspaceId || authState.user?.defaultWorkspaceId || 'None'}</p>
-              <p><strong>Error:</strong> {authState.error || 'None'}</p>
-              <p><strong>Supabase URL:</strong> {import.meta.env.VITE_SUPABASE_URL ? 'Configured' : 'Missing'}</p>
-              <p><strong>Supabase Key:</strong> {import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Configured' : 'Missing'}</p>
-            </div>
-          </div>
         </div>
       </div>
     );
