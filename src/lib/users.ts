@@ -621,7 +621,7 @@ export const userService = {
       return { data: null, error };
     }
     // Handle case where data is null
-    const transformedData = data ? data.map(workspace => ({
+    const transformedData = data?.map(workspace => ({
       id: workspace.id,
       name: workspace.name,
       ownerId: workspace.owner_id,
@@ -639,7 +639,7 @@ export const userService = {
         updatedAt: workspace.owner.updated_at,
         permissions: []
       } : undefined
-    })) : [];
+    })) || [];
 
     return { data: transformedData, error: null };
   },
