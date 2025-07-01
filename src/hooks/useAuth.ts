@@ -7,7 +7,6 @@ interface AuthState {
   loading: boolean;
   error: string | null;
   currentWorkspaceId: string | null;
-  needsBootstrap: boolean;
 }
 
 interface AuthContextType {
@@ -35,50 +34,8 @@ export const useAuthState = (): AuthContextType => {
     user: null,
     loading: true,
     error: null,
-    currentWorkspaceId: null,
-    needsBootstrap: false
+    currentWorkspaceId: null
   });
-
-  const checkBootstrapStatus = async () => {
-    if (!supabase) {
-      setAuthState(prev => ({ 
-        ...prev,
-        loading: false, 
-        error: 'Supabase not configured',
-        needsBootstrap: false
-      }));
-      return;
-    }
-
-    try {
-      console.log('🔍 Checking if system needs bootstrap...');
-      const { data, error } = await supabase.rpc('has_users');
-      
-      if (error && error.message) {
-        console.error('❌ Bootstrap check error:', error);
-        setAuthState(prev => ({ 
-          ...prev, 
-          loading: false, 
-          error: error.message,
-          needsBootstrap: false
-        }));
-      } else {
-        console.log('✅ Bootstrap check result:', data ? 'Users exist' : 'No users - bootstrap needed');
-        setAuthState(prev => ({ 
-          ...prev,
-          needsBootstrap: !data // If no users exist, bootstrap is needed
-        }));
-      }
-    } catch (err: any) {
-      console.error('❌ Bootstrap check exception:', err);
-      setAuthState(prev => ({ 
-        ...prev, 
-        loading: false, 
-        error: err.message,
-        needsBootstrap: false
-      }));
-    }
-  };
 
   const signIn = async (email: string, password: string) => {
     if (!supabase) {
@@ -145,7 +102,7 @@ export const useAuthState = (): AuthContextType => {
 
   const signOut = async () => {
     if (!supabase) {
-      setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null, needsBootstrap: false });
+      setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
       return;
     }
 
@@ -153,11 +110,11 @@ export const useAuthState = (): AuthContextType => {
     
     try {
       await supabase.auth.signOut();
-      setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null, needsBootstrap: false });
+      setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
     } catch (err: any) {
       console.error('Error signing out:', err);
       // Even if there's an error, clear the local state
-      setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null, needsBootstrap: false });
+      setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
     }
   };
 
@@ -176,13 +133,13 @@ export const useAuthState = (): AuthContextType => {
       
       if (authError) {
         console.error('❌ Auth error in getUser:', authError);
-        setAuthState(prev => ({ ...prev, loading: false, error: authError.message, needsBootstrap: prev.needsBootstrap }));
+        setAuthState(prev => ({ ...prev, loading: false, error: authError.message }));
         return;
       }
 
       if (!user) {
         console.log('❌ No authenticated user found');
-        setAuthState(prev => ({ ...prev, loading: false, error: null, needsBootstrap: prev.needsBootstrap }));
+        setAuthState(prev => ({ ...prev, loading: false, error: null }));
         return;
       }
 
@@ -191,17 +148,7 @@ export const useAuthState = (): AuthContextType => {
       console.log('📋 Step 2: Fetching user profile from database...');
       
       try {
-        // First, let's test if we can access the table at all
-        console.log('🧪 Testing basic table access...');
-        const { data: testData, error: testError } = await supabase
-          .from('user_profiles')
-          .select('count')
-          .limit(1);
-        
-        console.log('Test query result:', { testData, testError });
-
-        // Now try to fetch the specific user profile
-        console.log('🔍 Fetching specific user profile...');
+        // Fetch the specific user profile with all relationships
         const { data: userProfile, error: profileError } = await supabase
           .from('user_profiles')
           .select(`
@@ -254,18 +201,10 @@ export const useAuthState = (): AuthContextType => {
 
         if (profileError) {
           console.error('❌ Profile fetch error:', profileError);
-          console.error('Error details:', {
-            code: profileError.code,
-            message: profileError.message,
-            details: profileError.details,
-            hint: profileError.hint
-          });
-          
           setAuthState(prev => ({ 
             ...prev, 
             loading: false, 
-            error: `Profile error: ${profileError.message} (Code: ${profileError.code})`,
-            needsBootstrap: prev.needsBootstrap
+            error: `Profile error: ${profileError.message} (Code: ${profileError.code})`
           }));
           return;
         }
@@ -275,8 +214,7 @@ export const useAuthState = (): AuthContextType => {
           setAuthState(prev => ({ 
             ...prev, 
             loading: false, 
-            error: 'User profile not found in database',
-            needsBootstrap: prev.needsBootstrap
+            error: 'User profile not found in database'
           }));
           return;
         }
@@ -330,47 +268,26 @@ export const useAuthState = (): AuthContextType => {
           user: transformedUser, 
           loading: false, 
           error: null,
-          currentWorkspaceId: transformedUser.defaultWorkspaceId || null,
-          needsBootstrap: false // If we have a user, we don't need bootstrap
+          currentWorkspaceId: transformedUser.defaultWorkspaceId || null
         });
 
         console.log('🎉 Auth state updated successfully!');
-        console.log('Final auth state:', {
-          userId: transformedUser.id,
-          email: transformedUser.email,
-          role: transformedUser.role,
-          workspaceId: transformedUser.defaultWorkspaceId,
-          needsBootstrap: false
-        });
 
       } catch (profileErr: any) {
         console.error('❌ Profile processing error:', profileErr);
-        console.error('Profile processing error details:', {
-          name: profileErr.name,
-          message: profileErr.message,
-          stack: profileErr.stack
-        });
-        
         setAuthState(prev => ({ 
           ...prev, 
           loading: false, 
-          error: `Processing error: ${profileErr.message}`,
-          needsBootstrap: prev.needsBootstrap
+          error: `Processing error: ${profileErr.message}`
         }));
       }
     } catch (err: any) {
       console.error('❌ User refresh error:', err);
-      console.error('Refresh error details:', {
-        name: err.name,
-        message: err.message,
-        stack: err.stack
-      });
       setAuthState(prev => ({ 
         user: null, 
         loading: false, 
         error: err.message, 
-        currentWorkspaceId: null,
-        needsBootstrap: prev.needsBootstrap
+        currentWorkspaceId: null
       }));
     }
   };
@@ -413,8 +330,7 @@ export const useAuthState = (): AuthContextType => {
         user: null, 
         loading: false, 
         error: 'Supabase not configured', 
-        currentWorkspaceId: null,
-        needsBootstrap: false
+        currentWorkspaceId: null
       });
       return;
     }
@@ -438,13 +354,9 @@ export const useAuthState = (): AuthContextType => {
       }
     }, 15000); // 15 second timeout
 
-    // Check bootstrap status first
+    // Check for existing session
     const initializeAuth = async () => {
       try {
-        // Check if we need to bootstrap (create first admin)
-        await checkBootstrapStatus();
-        
-        // Check for existing session
         console.log('🔍 Checking existing session...');
         const { data: { session }, error } = await supabase.auth.getSession();
         

@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './hooks/useAuth.ts';
 import ProtectedRoute from './components/ProtectedRoute';
-import AdminBootstrap from './components/AdminBootstrap';
 import Login from './pages/Login';
 import DashboardPage from './pages/DashboardPage';
 import UsersPage from './pages/UsersPage';
@@ -13,7 +12,7 @@ import EmailSetupPage from './pages/EmailSetupPage';
 function App() {
   const { authState } = useAuth();
 
-  // Show loading while checking bootstrap status
+  // Show loading while checking auth status
   if (authState.loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-neutral-50 via-white to-neutral-100 flex items-center justify-center">
@@ -23,11 +22,6 @@ function App() {
         </div>
       </div>
     );
-  }
-
-  // Show bootstrap if no users exist
-  if (authState.needsBootstrap) {
-    return <AdminBootstrap />;
   }
 
   return (
