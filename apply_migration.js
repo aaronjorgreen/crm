@@ -28,7 +28,7 @@ async function applyMigration() {
     console.log('🔄 Reading migration file...');
     
     // Read the migration file
-    const migrationPath = path.join(__dirname, 'supabase', 'migrations', '20250701084716_rustic_snow.sql');
+    const migrationPath = path.join(__dirname, 'supabase', 'migrations', '20250701120000_fix_rls_policies.sql');
     const migrationSQL = fs.readFileSync(migrationPath, 'utf8');
     
     console.log('📄 Migration file loaded successfully');
@@ -208,7 +208,7 @@ async function executeKeyParts() {
 async function recordMigration() {
   try {
     // Try to record the migration as applied
-    const migrationVersion = '20250701084716';
+    const migrationVersion = '20250701120000';
     
     const { error } = await supabase
       .from('supabase_migrations.schema_migrations')
