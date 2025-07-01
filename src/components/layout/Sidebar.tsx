@@ -158,7 +158,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPath, onNavigate }) => {
     const isExpanded = expandedSections.includes(item.id);
     const isActive = currentPath === item.path;
     // Default to true for basic navigation items if auth is still loading
-    const hasAccess = authState.loading ? true : !item.permission || hasPermission(item.permission);
+    const hasAccess = !item.permission || hasPermission(item.permission);
 
     if (!hasAccess) return null;
 

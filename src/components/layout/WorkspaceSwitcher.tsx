@@ -13,6 +13,8 @@ const WorkspaceSwitcher: React.FC = () => {
   useEffect(() => {
     if (authState.user) {
       fetchWorkspaces();
+    } else {
+      setWorkspaces([]);
     }
   }, [authState.user]);
 
@@ -40,12 +42,12 @@ const WorkspaceSwitcher: React.FC = () => {
                           workspaces.find(w => w.id === authState.user?.defaultWorkspaceId);
 
   // Don't show for regular members unless they have multiple workspaces
-  if (authState.user?.role === 'member' && workspaces.length <= 1) {
+  if (!authState.user || (authState.user?.role === 'member' && workspaces.length <= 1)) {
     return null;
   }
 
   // Show a simplified version while loading
-  if (loading && workspaces.length === 0) {
+  if (loading) {
     return (
       <div className="flex items-center space-x-2 px-3 py-2 rounded-lg min-w-0">
         <Building className="h-4 w-4 text-neutral-600 flex-shrink-0" />

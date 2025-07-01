@@ -595,10 +595,15 @@ export const userService = {
     if (userProfile.role !== 'super_admin' && userProfile.role !== 'admin') {
       // Regular users can only see workspaces they're members of
       // Fetch user memberships first
-      const { data: memberships } = await supabase
+      const { data: memberships, error: membershipError } = await supabase
         .from('memberships')
         .select('workspace_id')
         .eq('user_id', targetUserId);
+      
+      if (membershipError) {
+        console.error('Error fetching memberships:', membershipError);
+        return { data: [], error: membershipError };
+      }
       
       const workspaceIds = memberships?.map(m => m.workspace_id) || [];
       
@@ -610,15 +615,19 @@ export const userService = {
     }
 
     const { data, error } = await query;
+    
+    if (error) {
+      console.error('Error fetching workspaces:', error);
+      return { data: null, error };
+    }
 
-    if (error) return { data: null, error };
-
-    const transformedData = data?.map(workspace => ({
+    // Handle case where data is null
+    const transformedData = data ? data.map(workspace => ({
       id: workspace.id,
       name: workspace.name,
       ownerId: workspace.owner_id,
       createdAt: workspace.created_at,
-      owner: workspace.owner ? {
+      owner: workspace.owner && workspace.owner.id ? {
         id: workspace.owner.id,
         email: workspace.owner.email,
         firstName: workspace.owner.first_name,
@@ -631,7 +640,7 @@ export const userService = {
         updatedAt: workspace.owner.updated_at,
         permissions: []
       } : undefined
-    })) || [];
+    })) : [];
 
     return { data: transformedData, error: null };
   },

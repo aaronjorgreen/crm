@@ -1,6 +1,7 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import SupabaseDiagnostic from './SupabaseDiagnostic';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -16,6 +17,11 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requiredPermission
 }) => {
   const { authState, hasPermission } = useAuth();
+
+  // Show diagnostic if there's an auth error (likely connection issue)
+  if (authState.error && !authState.user && !authState.loading) {
+    return <SupabaseDiagnostic />;
+  }
 
   // Show loading state while checking auth
   if (authState.loading) {
