@@ -608,6 +608,8 @@ export const userService = {
         } else {
           query = query.eq('owner_id', targetUserId);
         }
+      )
+    }
 
     const { data, error } = await query;
 
@@ -634,6 +636,7 @@ export const userService = {
     })) || [];
 
     return { data: transformedData, error: null };
+  }
   },
 
   // Get workspace members
@@ -770,3 +773,4 @@ export const userService = {
     };
   }
 };
+}
