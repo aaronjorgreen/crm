@@ -612,25 +612,9 @@ export const userService = {
       } else {
         query = query.eq('owner_id', targetUserId);
       }
-        console.error('Error fetching memberships:', membershipError);
-        return { data: [], error: membershipError };
-      }
-      
-      const workspaceIds = memberships?.map(m => m.workspace_id) || [];
-      
-      if (workspaceIds.length > 0) {
-        query = query.or(`owner_id.eq.${targetUserId},id.in.(${workspaceIds.map(id => `'${id}'`).join(',')})`);
-      } else {
-        query = query.eq('owner_id', targetUserId);
-      }
     }
 
     const { data, error } = await query;
-    
-    if (error) {
-      console.error('Error fetching workspaces:', error);
-      return { data: null, error };
-    }
     
     if (error) {
       console.error('Error fetching workspaces:', error);
