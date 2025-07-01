@@ -43,27 +43,17 @@ export const useAuthState = (): AuthContextType => {
     }
 
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
-    
+
     try {
-      console.log('🔐 Starting sign in for:', email);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
       if (error) {
-        console.error('❌ Auth error:', error);
         setAuthState(prev => ({ ...prev, loading: false, error: error.message }));
         return { error };
       }
 
-      console.log('✅ Auth successful, user ID:', data.user?.id);
-      
-      // The auth state change listener will handle refreshUser
       return {};
     } catch (err: any) {
-      console.error('❌ Sign in exception:', err);
       const errorMessage = err.message || 'An error occurred during sign in';
       setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
       return { error: { message: errorMessage } };
@@ -76,16 +66,14 @@ export const useAuthState = (): AuthContextType => {
     }
 
     setAuthState(prev => ({ ...prev, loading: true, error: null }));
-    
+
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          data: userData
-        }
+        options: { data: userData }
       });
-      
+
       if (error) {
         setAuthState(prev => ({ ...prev, loading: false, error: error.message }));
         return { error };
@@ -107,291 +95,153 @@ export const useAuthState = (): AuthContextType => {
     }
 
     setAuthState(prev => ({ ...prev, loading: true }));
-    
+
     try {
       await supabase.auth.signOut();
       setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
-    } catch (err: any) {
-      console.error('Error signing out:', err);
-      // Even if there's an error, clear the local state
+    } catch {
       setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
     }
   };
 
   const refreshUser = async () => {
     if (!supabase) {
-      console.log('❌ Supabase not configured');
       setAuthState(prev => ({ ...prev, loading: false, error: 'Supabase not configured' }));
       return;
     }
 
     try {
-      console.log('🔄 Starting refreshUser function...');
-      
-      console.log('📋 Step 1: Getting authenticated user session from Supabase...');
       const { data: { user }, error: authError } = await supabase.auth.getUser();
-      
-      if (authError) {
-        console.error('❌ Auth error in getUser:', authError);
-        setAuthState(prev => ({ ...prev, loading: false, error: authError.message }));
+
+      if (authError || !user) {
+        setAuthState(prev => ({ ...prev, loading: false, error: authError?.message || null }));
         return;
       }
 
-      if (!user) {
-        console.log('❌ No authenticated user found');
-        setAuthState(prev => ({ ...prev, loading: false, error: null }));
-        return;
-      }
-
-      console.log('✅ Authenticated user found:', user.id, user.email);
-
-      console.log('📋 Step 2: Fetching user profile from database...');
-      
-      try {
-        // Fetch the specific user profile with all relationships
-        const { data: userProfile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select(`
+      const { data: userProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select(`
+          id,
+          email,
+          first_name,
+          last_name,
+          role,
+          avatar_url,
+          is_active,
+          email_verified,
+          failed_login_attempts,
+          locked_until,
+          last_login,
+          last_activity,
+          created_at,
+          updated_at,
+          ai_preferences,
+          default_workspace_id,
+          memberships:memberships(
             id,
-            email,
-            first_name,
-            last_name,
+            workspace_id,
             role,
-            avatar_url,
-            is_active,
-            email_verified,
-            failed_login_attempts,
-            locked_until,
-            last_login,
-            last_activity,
-            created_at,
-            updated_at,
-            ai_preferences,
-            default_workspace_id,
-            memberships:memberships(
-              id,
-              workspace_id,
-              role,
-              joined_at,
-              workspace:workspaces(
-                id,
-                name,
-                owner_id,
-                created_at
-              )
-            ),
-            user_permissions:user_permissions(
-              id,
-              permission_id,
-              granted_at,
-              permission:permissions(
-                id,
-                name,
-                description,
-                category
-              )
-            )
-          `)
-          .eq('id', user.id)
-          .single();
+            joined_at,
+            workspace:workspaces(id, name, owner_id, created_at)
+          ),
+          user_permissions:user_permissions!user_permissions_user_id_fkey(
+            id,
+            permission_id,
+            granted_at,
+            permission:permissions(id, name, description, category)
+          )
+        `)
+        .eq('id', user.id)
+        .single();
 
-        console.log('📋 Step 3: Processing profile query result...');
-        console.log('Profile Error:', profileError);
-        console.log('Profile Data:', userProfile);
-
-        if (profileError) {
-          console.error('❌ Profile fetch error:', profileError);
-          setAuthState(prev => ({ 
-            ...prev, 
-            loading: false, 
-            error: `Profile error: ${profileError.message} (Code: ${profileError.code})`
-          }));
-          return;
-        }
-
-        if (!userProfile) {
-          console.error('❌ No user profile data returned');
-          setAuthState(prev => ({ 
-            ...prev, 
-            loading: false, 
-            error: 'User profile not found in database'
-          }));
-          return;
-        }
-
-        console.log('✅ User profile loaded successfully:', userProfile.email, 'Role:', userProfile.role);
-        console.log('📋 Step 4: Transforming profile data...');
-
-        // Transform the profile data
-        const transformedUser: UserProfile = {
-          id: userProfile.id,
-          email: userProfile.email,
-          firstName: userProfile.first_name || 'User',
-          lastName: userProfile.last_name || '',
-          role: userProfile.role || 'member',
-          avatarUrl: userProfile.avatar_url,
-          isActive: userProfile.is_active !== false,
-          emailVerified: userProfile.email_verified || false,
-          failedLoginAttempts: userProfile.failed_login_attempts || 0,
-          lockedUntil: userProfile.locked_until,
-          lastLogin: userProfile.last_login,
-          lastActivity: userProfile.last_activity,
-          createdAt: userProfile.created_at,
-          updatedAt: userProfile.updated_at,
-          aiPreferences: userProfile.ai_preferences || {},
-          defaultWorkspaceId: userProfile.default_workspace_id,
-          permissions: userProfile.user_permissions?.map((up: any) => ({
-            id: up.permission.id,
-            name: up.permission.name,
-            description: up.permission.description,
-            category: up.permission.category
-          })) || [],
-          memberships: userProfile.memberships?.map((m: any) => ({
-            id: m.id,
-            userId: m.user_id,
-            workspaceId: m.workspace_id,
-            role: m.role,
-            joinedAt: m.joined_at,
-            workspace: m.workspace ? {
-              id: m.workspace.id,
-              name: m.workspace.name,
-              ownerId: m.workspace.owner_id,
-              createdAt: m.workspace.created_at
-            } : undefined
-          })) || []
-        };
-
-        console.log('✅ Profile transformation completed');
-        console.log('📋 Step 5: Setting auth state...');
-
-        setAuthState({ 
-          user: transformedUser, 
-          loading: false, 
-          error: null,
-          currentWorkspaceId: transformedUser.defaultWorkspaceId || null
-        });
-
-        console.log('🎉 Auth state updated successfully!');
-
-      } catch (profileErr: any) {
-        console.error('❌ Profile processing error:', profileErr);
-        setAuthState(prev => ({ 
-          ...prev, 
-          loading: false, 
-          error: `Processing error: ${profileErr.message}`
-        }));
+      if (profileError || !userProfile) {
+        setAuthState(prev => ({ ...prev, loading: false, error: profileError?.message || 'User profile not found' }));
+        return;
       }
+
+      const transformedUser: UserProfile = {
+        id: userProfile.id,
+        email: userProfile.email,
+        firstName: userProfile.first_name || 'User',
+        lastName: userProfile.last_name || '',
+        role: userProfile.role || 'member',
+        avatarUrl: userProfile.avatar_url,
+        isActive: userProfile.is_active !== false,
+        emailVerified: userProfile.email_verified || false,
+        failedLoginAttempts: userProfile.failed_login_attempts || 0,
+        lockedUntil: userProfile.locked_until,
+        lastLogin: userProfile.last_login,
+        lastActivity: userProfile.last_activity,
+        createdAt: userProfile.created_at,
+        updatedAt: userProfile.updated_at,
+        aiPreferences: userProfile.ai_preferences || {},
+        defaultWorkspaceId: userProfile.default_workspace_id,
+        permissions: userProfile.user_permissions?.map((up: any) => ({
+          id: up.permission.id,
+          name: up.permission.name,
+          description: up.permission.description,
+          category: up.permission.category
+        })) || [],
+        memberships: userProfile.memberships?.map((m: any) => ({
+          id: m.id,
+          userId: m.user_id,
+          workspaceId: m.workspace_id,
+          role: m.role,
+          joinedAt: m.joined_at,
+          workspace: m.workspace ? {
+            id: m.workspace.id,
+            name: m.workspace.name,
+            ownerId: m.workspace.owner_id,
+            createdAt: m.workspace.created_at
+          } : undefined
+        })) || []
+      };
+
+      setAuthState({ user: transformedUser, loading: false, error: null, currentWorkspaceId: transformedUser.defaultWorkspaceId || null });
+
     } catch (err: any) {
-      console.error('❌ User refresh error:', err);
-      setAuthState(prev => ({ 
-        user: null, 
-        loading: false, 
-        error: err.message, 
-        currentWorkspaceId: null
-      }));
+      setAuthState(prev => ({ user: null, loading: false, error: err.message, currentWorkspaceId: null }));
     }
   };
 
   const switchWorkspace = async (workspaceId: string) => {
     if (!supabase || !authState.user) return;
-
-    try {
-      // Update local state immediately for better UX
-      setAuthState(prev => ({
-        ...prev,
-        currentWorkspaceId: workspaceId
-      }));
-    } catch (error) {
-      console.error('Error switching workspace:', error);
-    }
+    setAuthState(prev => ({ ...prev, currentWorkspaceId: workspaceId }));
   };
 
   const hasPermission = (permission: string): boolean => {
     if (!authState.user) return false;
-    
-    // Super admins have all permissions
     if (authState.user.role === 'super_admin') return true;
-    
-    // Admins have most permissions except super admin specific ones
     if (authState.user.role === 'admin') {
       const superAdminOnlyPermissions = ['admin.super'];
-      if (superAdminOnlyPermissions.includes(permission)) return false;
-      return true;
+      return !superAdminOnlyPermissions.includes(permission);
     }
-    
-    // Check specific permissions
     return authState.user.permissions?.some(p => p.name === permission) || false;
   };
 
   useEffect(() => {
     if (!supabase) {
-      console.log('❌ Supabase not configured');
-      setAuthState({ 
-        user: null, 
-        loading: false, 
-        error: 'Supabase not configured', 
-        currentWorkspaceId: null
-      });
+      setAuthState({ user: null, loading: false, error: 'Supabase not configured', currentWorkspaceId: null });
       return;
     }
 
     let isSubscribed = true;
-
-    // Set a timeout to prevent infinite loading
     const loadingTimeout = setTimeout(() => {
-      if (isSubscribed) {
-        console.log('⏰ Loading timeout reached - stopping loading state');
-        setAuthState(prev => {
-          if (prev.loading && !prev.user) {
-            return { 
-              ...prev, 
-              loading: false, 
-              error: 'Authentication timeout - please refresh the page' 
-            };
-          }
-          return prev;
-        });
+      if (isSubscribed && authState.loading && !authState.user) {
+        setAuthState(prev => ({ ...prev, loading: false, error: 'Authentication timeout - please refresh the page' }));
       }
-    }, 15000); // 15 second timeout
+    }, 15000);
 
-    // Check for existing session
     const initializeAuth = async () => {
       try {
-        console.log('🔍 Checking existing session...');
         const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('❌ Session check error:', error);
-          if (isSubscribed) {
-            setAuthState(prev => ({ 
-              ...prev, 
-              loading: false, 
-              error: error.message 
-            }));
-          }
+        if (error || !session?.user) {
+          if (isSubscribed) setAuthState(prev => ({ ...prev, loading: false, error: error?.message || null }));
           return;
         }
-        
-        if (session?.user) {
-          console.log('✅ Existing session found for:', session.user.email);
-          if (isSubscribed) {
-            await refreshUser();
-          }
-        } else {
-          console.log('❌ No existing session');
-          if (isSubscribed) {
-            setAuthState(prev => ({ ...prev, loading: false }));
-          }
-        }
+        if (isSubscribed) await refreshUser();
       } catch (error: any) {
-        console.error('❌ Auth initialization error:', error);
-        if (isSubscribed) {
-          setAuthState(prev => ({ 
-            ...prev, 
-            loading: false, 
-            error: error.message 
-          }));
-        }
+        if (isSubscribed) setAuthState(prev => ({ ...prev, loading: false, error: error.message }));
       } finally {
         clearTimeout(loadingTimeout);
       }
@@ -399,29 +249,12 @@ export const useAuthState = (): AuthContextType => {
 
     initializeAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state change:', event, session?.user?.email);
       clearTimeout(loadingTimeout);
-      
       if (!isSubscribed) return;
-      
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('✅ User signed in, refreshing profile...');
-        await refreshUser();
-      } else if (event === 'SIGNED_OUT') {
-        console.log('👋 User signed out');
-        setAuthState(prev => ({ 
-          ...prev, 
-          user: null, 
-          loading: false, 
-          error: null, 
-          currentWorkspaceId: null 
-        }));
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('🔄 Token refreshed, updating profile...');
-        await refreshUser();
-      }
+      if (event === 'SIGNED_IN' && session?.user) await refreshUser();
+      else if (event === 'SIGNED_OUT') setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
+      else if (event === 'TOKEN_REFRESHED' && session?.user) await refreshUser();
     });
 
     return () => {
