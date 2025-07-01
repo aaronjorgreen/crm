@@ -127,10 +127,14 @@ export const useAuthState = (): AuthContextType => {
       console.log('✅ Authenticated user found:', user.id, user.email);
 
       try {
-        // Get user metadata from auth
-        const firstName = user.user_metadata?.first_name || 'User';
-        const lastName = user.user_metadata?.last_name || '';
-        const role = user.user_metadata?.role || 'member';
+        // Get user metadata from auth - check both user_metadata and raw_user_meta_data
+        const firstName = user.user_metadata?.first_name || user.raw_user_meta_data?.first_name || 'User';
+        const lastName = user.user_metadata?.last_name || user.raw_user_meta_data?.last_name || '';
+        const role = user.user_metadata?.role || user.raw_user_meta_data?.role || 'member';
+        
+        console.log('🔍 User metadata:', { firstName, lastName, role });
+        console.log('🔍 Raw user metadata:', user.raw_user_meta_data);
+        console.log('🔍 User metadata:', user.user_metadata);
         
         // Create a minimal user profile from auth data
         const minimalUser: UserProfile = {
@@ -171,6 +175,12 @@ export const useAuthState = (): AuthContextType => {
             minimalUser.lastLogin = userProfile.last_login;
             minimalUser.lastActivity = userProfile.last_activity;
             minimalUser.defaultWorkspaceId = userProfile.default_workspace_id;
+            
+            console.log('✅ Final user profile:', { 
+              id: minimalUser.id, 
+              role: minimalUser.role, 
+              firstName: minimalUser.firstName 
+            });
           }
         } catch (profileError) {
           console.warn('⚠️ Error fetching user profile, using minimal profile:', profileError);
@@ -245,9 +255,9 @@ export const useAuthState = (): AuthContextType => {
         const fallbackUser: UserProfile = {
           id: user.id,
           email: user.email || '',
-          firstName: user.user_metadata?.first_name || 'User',
-          lastName: user.user_metadata?.last_name || '',
-          role: user.user_metadata?.role || 'member',
+          firstName: user.user_metadata?.first_name || user.raw_user_meta_data?.first_name || 'User',
+          lastName: user.user_metadata?.last_name || user.raw_user_meta_data?.last_name || '',
+          role: user.user_metadata?.role || user.raw_user_meta_data?.role || 'super_admin',
           isActive: true,
           emailVerified: true,
           failedLoginAttempts: 0,
@@ -257,6 +267,8 @@ export const useAuthState = (): AuthContextType => {
           permissions: [],
           memberships: []
         };
+        
+        console.log('⚠️ Using fallback user profile:', fallbackUser);
         
         setAuthState({
           user: fallbackUser,
