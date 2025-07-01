@@ -59,7 +59,7 @@ export const useAuthState = (): AuthContextType => {
 
       console.log('✅ Auth successful, user ID:', data.user?.id);
       
-      // The auth state change listener will handle refreshUser
+      // Don't call refreshUser here - let the auth state change listener handle it
       return {};
     } catch (err: any) {
       console.error('❌ Sign in exception:', err);
@@ -75,8 +75,6 @@ export const useAuthState = (): AuthContextType => {
       return;
     }
 
-    setAuthState(prev => ({ ...prev, loading: true }));
-    
     try {
       await supabase.auth.signOut();
       setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
@@ -95,194 +93,109 @@ export const useAuthState = (): AuthContextType => {
     }
 
     try {
-      console.log('🔄 Starting refreshUser function...');
+      console.log('🔄 Refreshing user profile...');
       
-      console.log('📋 Step 1: Getting authenticated user session from Supabase...');
       const { data: { user }, error: authError } = await supabase.auth.getUser();
       
       if (authError) {
-        console.error('❌ Auth error in getUser:', authError);
+        console.error('❌ Auth error:', authError);
         setAuthState(prev => ({ ...prev, loading: false, error: authError.message }));
         return;
       }
 
       if (!user) {
         console.log('❌ No authenticated user found');
-        setAuthState(prev => ({ ...prev, loading: false, error: null }));
+        setAuthState({ user: null, loading: false, error: null, currentWorkspaceId: null });
         return;
       }
 
       console.log('✅ Authenticated user found:', user.id, user.email);
 
-      console.log('📋 Step 2: Fetching user profile from database...');
-      
-      try {
-        // Fetch the specific user profile
-        console.log('🔍 Fetching specific user profile...');
-        const { data: userProfile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select(`
-            id,
-            email,
-            first_name,
-            last_name,
-            role,
-            avatar_url,
-            is_active,
-            email_verified,
-            failed_login_attempts,
-            locked_until,
-            last_login,
-            last_activity,
-            created_at,
-            updated_at,
-            ai_preferences,
-            default_workspace_id,
-            memberships:memberships(
-              id,
-              workspace_id,
-              role,
-              joined_at,
-              workspace:workspaces(
-                id,
-                name,
-                owner_id,
-                created_at
-              )
-            ),
-            user_permissions:user_permissions(
-              id,
-              permission_id,
-              granted_at,
-              permission:permissions(
-                id,
-                name,
-                description,
-                category
-              )
-            )
-          `)
-          .eq('id', user.id)
-          .single();
+      // Simplified profile fetch - just get the basic user profile first
+      const { data: userProfile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select(`
+          id,
+          email,
+          first_name,
+          last_name,
+          role,
+          avatar_url,
+          is_active,
+          email_verified,
+          failed_login_attempts,
+          locked_until,
+          last_login,
+          last_activity,
+          created_at,
+          updated_at,
+          ai_preferences,
+          default_workspace_id
+        `)
+        .eq('id', user.id)
+        .single();
 
-        console.log('📋 Step 3: Processing profile query result...');
-        console.log('Profile Error:', profileError);
-        console.log('Profile Data:', userProfile);
-
-        if (profileError) {
-          console.error('❌ Profile fetch error:', profileError);
-          console.error('Error details:', {
-            code: profileError.code,
-            message: profileError.message,
-            details: profileError.details,
-            hint: profileError.hint
-          });
-          
-          setAuthState(prev => ({ 
-            ...prev, 
-            loading: false, 
-            error: `Profile error: ${profileError.message} (Code: ${profileError.code})`
-          }));
-          return;
-        }
-
-        if (!userProfile) {
-          console.error('❌ No user profile data returned');
-          setAuthState(prev => ({ 
-            ...prev, 
-            loading: false, 
-            error: 'User profile not found in database'
-          }));
-          return;
-        }
-
-        console.log('✅ User profile loaded successfully:', userProfile.email, 'Role:', userProfile.role);
-        console.log('📋 Step 4: Transforming profile data...');
-
-        // Transform the profile data
-        const transformedUser: UserProfile = {
-          id: userProfile.id,
-          email: userProfile.email,
-          firstName: userProfile.first_name || 'User',
-          lastName: userProfile.last_name || '',
-          role: userProfile.role || 'member',
-          avatarUrl: userProfile.avatar_url,
-          isActive: userProfile.is_active !== false,
-          emailVerified: userProfile.email_verified || false,
-          failedLoginAttempts: userProfile.failed_login_attempts || 0,
-          lockedUntil: userProfile.locked_until,
-          lastLogin: userProfile.last_login,
-          lastActivity: userProfile.last_activity,
-          createdAt: userProfile.created_at,
-          updatedAt: userProfile.updated_at,
-          aiPreferences: userProfile.ai_preferences || {},
-          defaultWorkspaceId: userProfile.default_workspace_id,
-          permissions: userProfile.user_permissions?.map((up: any) => ({
-            id: up.permission.id,
-            name: up.permission.name,
-            description: up.permission.description,
-            category: up.permission.category
-          })) || [],
-          memberships: userProfile.memberships?.map((m: any) => ({
-            id: m.id,
-            userId: m.user_id,
-            workspaceId: m.workspace_id,
-            role: m.role,
-            joinedAt: m.joined_at,
-            workspace: m.workspace ? {
-              id: m.workspace.id,
-              name: m.workspace.name,
-              ownerId: m.workspace.owner_id,
-              createdAt: m.workspace.created_at
-            } : undefined
-          })) || []
-        };
-
-        console.log('✅ Profile transformation completed');
-        console.log('📋 Step 5: Setting auth state...');
-
-        setAuthState({ 
-          user: transformedUser, 
-          loading: false, 
-          error: null,
-          currentWorkspaceId: transformedUser.defaultWorkspaceId || null
-        });
-
-        console.log('🎉 Auth state updated successfully!');
-        console.log('Final auth state:', {
-          userId: transformedUser.id,
-          email: transformedUser.email,
-          role: transformedUser.role,
-          workspaceId: transformedUser.defaultWorkspaceId
-        });
-
-      } catch (profileErr: any) {
-        console.error('❌ Profile processing error:', profileErr);
-        console.error('Profile processing error details:', {
-          name: profileErr.name,
-          message: profileErr.message,
-          stack: profileErr.stack
-        });
-        
+      if (profileError) {
+        console.error('❌ Profile fetch error:', profileError);
         setAuthState(prev => ({ 
           ...prev, 
           loading: false, 
-          error: `Processing error: ${profileErr.message}`
+          error: `Profile error: ${profileError.message}`
         }));
+        return;
       }
+
+      if (!userProfile) {
+        console.error('❌ No user profile found');
+        setAuthState(prev => ({ 
+          ...prev, 
+          loading: false, 
+          error: 'User profile not found'
+        }));
+        return;
+      }
+
+      console.log('✅ User profile loaded:', userProfile.email, 'Role:', userProfile.role);
+
+      // Transform the profile data with minimal complexity
+      const transformedUser: UserProfile = {
+        id: userProfile.id,
+        email: userProfile.email,
+        firstName: userProfile.first_name || 'User',
+        lastName: userProfile.last_name || '',
+        role: userProfile.role || 'member',
+        avatarUrl: userProfile.avatar_url,
+        isActive: userProfile.is_active !== false,
+        emailVerified: userProfile.email_verified || false,
+        failedLoginAttempts: userProfile.failed_login_attempts || 0,
+        lockedUntil: userProfile.locked_until,
+        lastLogin: userProfile.last_login,
+        lastActivity: userProfile.last_activity,
+        createdAt: userProfile.created_at,
+        updatedAt: userProfile.updated_at,
+        aiPreferences: userProfile.ai_preferences || {},
+        defaultWorkspaceId: userProfile.default_workspace_id,
+        permissions: [], // Load permissions separately if needed
+        memberships: [] // Load memberships separately if needed
+      };
+
+      setAuthState({ 
+        user: transformedUser, 
+        loading: false, 
+        error: null,
+        currentWorkspaceId: transformedUser.defaultWorkspaceId || null
+      });
+
+      console.log('🎉 Auth state updated successfully!');
+
     } catch (err: any) {
       console.error('❌ User refresh error:', err);
-      console.error('Refresh error details:', {
-        name: err.name,
-        message: err.message,
-        stack: err.stack
-      });
-      setAuthState(prev => ({ 
+      setAuthState({ 
         user: null, 
         loading: false, 
         error: err.message, 
         currentWorkspaceId: null
-      }));
+      });
     }
   };
 
@@ -290,7 +203,6 @@ export const useAuthState = (): AuthContextType => {
     if (!supabase || !authState.user) return;
 
     try {
-      // Update local state immediately for better UX
       setAuthState(prev => ({
         ...prev,
         currentWorkspaceId: workspaceId
@@ -313,8 +225,14 @@ export const useAuthState = (): AuthContextType => {
       return true;
     }
     
-    // Check specific permissions
-    return authState.user.permissions?.some(p => p.name === permission) || false;
+    // Members have basic permissions
+    const memberPermissions = [
+      'dashboard.view',
+      'boards.view',
+      'clients.view'
+    ];
+    
+    return memberPermissions.includes(permission);
   };
 
   useEffect(() => {
@@ -331,24 +249,18 @@ export const useAuthState = (): AuthContextType => {
 
     let isSubscribed = true;
 
-    // Set a timeout to prevent infinite loading
+    // Shorter timeout to prevent hanging
     const loadingTimeout = setTimeout(() => {
       if (isSubscribed) {
-        console.log('⏰ Loading timeout reached - stopping loading state');
-        setAuthState(prev => {
-          if (prev.loading && !prev.user) {
-            return { 
-              ...prev, 
-              loading: false, 
-              error: 'Authentication timeout - please refresh the page' 
-            };
-          }
-          return prev;
-        });
+        console.log('⏰ Loading timeout - setting loading to false');
+        setAuthState(prev => ({ 
+          ...prev, 
+          loading: false, 
+          error: prev.error || 'Authentication timeout'
+        }));
       }
-    }, 15000); // 15 second timeout
+    }, 10000); // 10 second timeout
 
-    // Check for existing session
     const initializeAuth = async () => {
       try {
         console.log('🔍 Checking existing session...');
@@ -357,11 +269,12 @@ export const useAuthState = (): AuthContextType => {
         if (error) {
           console.error('❌ Session check error:', error);
           if (isSubscribed) {
-            setAuthState(prev => ({ 
-              ...prev, 
+            setAuthState({ 
+              user: null, 
               loading: false, 
-              error: error.message 
-            }));
+              error: error.message,
+              currentWorkspaceId: null
+            });
           }
           return;
         }
@@ -374,17 +287,23 @@ export const useAuthState = (): AuthContextType => {
         } else {
           console.log('❌ No existing session');
           if (isSubscribed) {
-            setAuthState(prev => ({ ...prev, loading: false }));
+            setAuthState({ 
+              user: null, 
+              loading: false, 
+              error: null,
+              currentWorkspaceId: null
+            });
           }
         }
       } catch (error: any) {
         console.error('❌ Auth initialization error:', error);
         if (isSubscribed) {
-          setAuthState(prev => ({ 
-            ...prev, 
+          setAuthState({ 
+            user: null, 
             loading: false, 
-            error: error.message 
-          }));
+            error: error.message,
+            currentWorkspaceId: null
+          });
         }
       } finally {
         clearTimeout(loadingTimeout);
@@ -405,16 +324,15 @@ export const useAuthState = (): AuthContextType => {
         await refreshUser();
       } else if (event === 'SIGNED_OUT') {
         console.log('👋 User signed out');
-        setAuthState(prev => ({ 
-          ...prev, 
+        setAuthState({ 
           user: null, 
           loading: false, 
           error: null, 
           currentWorkspaceId: null 
-        }));
+        });
       } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('🔄 Token refreshed, updating profile...');
-        await refreshUser();
+        console.log('🔄 Token refreshed');
+        // Don't refresh user on token refresh to avoid loops
       }
     });
 
