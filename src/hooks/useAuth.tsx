@@ -190,18 +190,7 @@ export const useAuthState = (): AuthContextType => {
         try {
           const { data: memberships } = await supabase
             .from('memberships')
-            .select(`
-              id,
-              workspace_id,
-              role,
-              joined_at,
-              workspace:workspaces(
-                id,
-                name,
-                owner_id,
-                created_at
-              )
-            `)
+            .select('id, workspace_id, role, joined_at')
             .eq('user_id', user.id);
           
           if (memberships && memberships.length > 0) {
@@ -211,13 +200,7 @@ export const useAuthState = (): AuthContextType => {
               userId: user.id,
               workspaceId: m.workspace_id,
               role: m.role,
-              joinedAt: m.joined_at,
-              workspace: m.workspace ? {
-                id: m.workspace.id,
-                name: m.workspace.name,
-                ownerId: m.workspace.owner_id,
-                createdAt: m.workspace.created_at
-              } : undefined
+              joinedAt: m.joined_at
             }));
           }
         } catch (membershipError) {
