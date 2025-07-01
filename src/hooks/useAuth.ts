@@ -436,8 +436,8 @@ export const useAuthState = (): AuthContextType => {
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const value = useAuthState();
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const authContextValue = useAuthState();
+  return <AuthContext.Provider value={authContextValue}>{children}</AuthContext.Provider>;
 }
 
 export { AuthContext };
