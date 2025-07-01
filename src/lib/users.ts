@@ -595,13 +595,19 @@ export const userService = {
     if (userProfile.role !== 'super_admin' && userProfile.role !== 'admin') {
       // Regular users can only see workspaces they're members of
       query = query.or(`owner_id.eq.${targetUserId},id.in.(${
-        supabase
+        // Use a simpler approach to avoid potential issues with the query builder
+        const { data: memberships } = await supabase
           .from('memberships')
           .select('workspace_id')
-          .eq('user_id', targetUserId)
-          .toString()
-      })`);
-    }
+          .eq('user_id', targetUserId);
+        
+        const workspaceIds = memberships?.map(m => m.workspace_id) || [];
+        
+        if (workspaceIds.length > 0) {
+          query = query.or(`owner_id.eq.${targetUserId},id.in.(${workspaceIds.map(id => `'${id}'`).join(',')})`);
+        } else {
+          query = query.eq('owner_id', targetUserId);
+        }
 
     const { data, error } = await query;
 

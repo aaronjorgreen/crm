@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertTriangle } from 'lucide-react';
 import AuthLayout from '../components/layout/AuthLayout';
 import Input from '../components/ui/Input';
@@ -8,7 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
-  const { signIn } = useAuth();
+  const { signIn, authState } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,6 +16,11 @@ const Login: React.FC = () => {
     email: '',
     password: ''
   });
+
+  // Redirect to dashboard if already logged in
+  if (authState.user) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

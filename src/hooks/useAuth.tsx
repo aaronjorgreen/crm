@@ -111,82 +111,116 @@ export const useAuthState = (): AuthContextType => {
 
       console.log('✅ Authenticated user found:', user.id, user.email);
 
-      // Simplified profile fetch - just get the basic user profile first
-      const { data: userProfile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select(`
-          id,
-          email,
-          first_name,
-          last_name,
+      try {
+        // Simplified profile fetch - just get the basic user profile first
+        const { data: userProfile, error: profileError } = await supabase
+          .from('user_profiles')
+          .select(`
+            id,
+            email,
+            first_name,
+            last_name,
+            role,
+            avatar_url,
+            is_active,
+            email_verified,
+            failed_login_attempts,
+            locked_until,
+            last_login,
+            last_activity,
+            created_at,
+            updated_at,
+            ai_preferences,
+            default_workspace_id
+          `)
+          .eq('id', user.id)
+          .single();
+
+        if (profileError) {
+          console.error('❌ Profile fetch error:', profileError);
+          setAuthState(prev => ({ 
+            ...prev, 
+            loading: false, 
+            error: `Profile error: ${profileError.message}`
+          }));
+          return;
+        }
+
+        if (!userProfile) {
+          console.error('❌ No user profile found');
+          setAuthState(prev => ({ 
+            ...prev, 
+            loading: false, 
+            error: 'User profile not found'
+          }));
+          return;
+        }
+
+        console.log('✅ User profile loaded:', userProfile.email, 'Role:', userProfile.role);
+
+        // Transform the profile data with minimal complexity
+        const transformedUser: UserProfile = {
+          id: userProfile.id,
+          email: userProfile.email,
+          firstName: userProfile.first_name || 'User',
+          lastName: userProfile.last_name || '',
+          role: userProfile.role || 'member',
+          avatarUrl: userProfile.avatar_url,
+          isActive: userProfile.is_active !== false,
+          emailVerified: userProfile.email_verified || false,
+          failedLoginAttempts: userProfile.failed_login_attempts || 0,
+          lockedUntil: userProfile.locked_until,
+          lastLogin: userProfile.last_login,
+          lastActivity: userProfile.last_activity,
+          createdAt: userProfile.created_at,
+          updatedAt: userProfile.updated_at,
+          aiPreferences: userProfile.ai_preferences || {},
+          defaultWorkspaceId: userProfile.default_workspace_id,
+          permissions: [], // Load permissions separately if needed
+          memberships: [] // Load memberships separately if needed
+        };
+
+        setAuthState({ 
+          user: transformedUser, 
+          loading: false, 
+          error: null,
+          currentWorkspaceId: transformedUser.defaultWorkspaceId || null
+        });
+
+        console.log('🎉 Auth state updated successfully!');
+      } catch (profileErr: any) {
+        console.error('❌ Profile processing error:', profileErr);
+        
+        // Fallback to metadata from auth user if profile fetch fails
+        const firstName = user.user_metadata?.first_name || user.user_metadata?.firstName || 'User';
+        const lastName = user.user_metadata?.last_name || user.user_metadata?.lastName || '';
+        const role = user.user_metadata?.role || 'member';
+        
+        const fallbackUser: UserProfile = {
+          id: user.id,
+          email: user.email || '',
+          firstName,
+          lastName,
           role,
-          avatar_url,
-          is_active,
-          email_verified,
-          failed_login_attempts,
-          locked_until,
-          last_login,
-          last_activity,
-          created_at,
-          updated_at,
-          ai_preferences,
-          default_workspace_id
-        `)
-        .eq('id', user.id)
-        .single();
-
-      if (profileError) {
-        console.error('❌ Profile fetch error:', profileError);
-        setAuthState(prev => ({ 
-          ...prev, 
-          loading: false, 
-          error: `Profile error: ${profileError.message}`
-        }));
-        return;
+          isActive: true,
+          emailVerified: true,
+          failedLoginAttempts: 0,
+          createdAt: user.created_at || new Date().toISOString(),
+          updatedAt: user.updated_at || new Date().toISOString(),
+          aiPreferences: {},
+          permissions: [],
+          memberships: []
+        };
+        
+        setAuthState({
+          user: fallbackUser,
+          loading: false,
+          error: null,
+          currentWorkspaceId: null
+        });
+        
+        console.log('⚠️ Using fallback user data from auth metadata');
       }
-
-      if (!userProfile) {
-        console.error('❌ No user profile found');
-        setAuthState(prev => ({ 
-          ...prev, 
-          loading: false, 
-          error: 'User profile not found'
-        }));
-        return;
-      }
-
-      console.log('✅ User profile loaded:', userProfile.email, 'Role:', userProfile.role);
-
-      // Transform the profile data with minimal complexity
-      const transformedUser: UserProfile = {
-        id: userProfile.id,
-        email: userProfile.email,
-        firstName: userProfile.first_name || 'User',
-        lastName: userProfile.last_name || '',
-        role: userProfile.role || 'member',
-        avatarUrl: userProfile.avatar_url,
-        isActive: userProfile.is_active !== false,
-        emailVerified: userProfile.email_verified || false,
-        failedLoginAttempts: userProfile.failed_login_attempts || 0,
-        lockedUntil: userProfile.locked_until,
-        lastLogin: userProfile.last_login,
-        lastActivity: userProfile.last_activity,
-        createdAt: userProfile.created_at,
-        updatedAt: userProfile.updated_at,
-        aiPreferences: userProfile.ai_preferences || {},
-        defaultWorkspaceId: userProfile.default_workspace_id,
-        permissions: [], // Load permissions separately if needed
-        memberships: [] // Load memberships separately if needed
-      };
-
-      setAuthState({ 
-        user: transformedUser, 
-        loading: false, 
-        error: null,
-        currentWorkspaceId: transformedUser.defaultWorkspaceId || null
-      });
-
-      console.log('🎉 Auth state updated successfully!');
 
     } catch (err: any) {
       console.error('❌ User refresh error:', err);
@@ -259,7 +293,7 @@ export const useAuthState = (): AuthContextType => {
           error: prev.error || 'Authentication timeout'
         }));
       }
-    }, 10000); // 10 second timeout
+    }, 5000); // 5 second timeout
 
     const initializeAuth = async () => {
       try {
