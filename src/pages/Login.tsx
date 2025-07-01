@@ -22,6 +22,11 @@ const Login: React.FC = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
+  // Redirect to dashboard if already logged in
+  if (authState.user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);

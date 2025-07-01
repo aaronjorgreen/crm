@@ -1,7 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '../lib/supabase';
 import type { UserProfile } from '../types/user';
-import { userService } from '../lib/users';
 
 interface AuthState {
   user: UserProfile | null;
@@ -60,7 +59,7 @@ export const useAuthState = (): AuthContextType => {
 
       console.log('✅ Auth successful, user ID:', data.user?.id);
       
-      // Don't call refreshUser here - let the auth state change listener handle it
+      // The auth state change listener will handle refreshUser
       return {};
     } catch (err: any) {
       console.error('❌ Sign in exception:', err);
@@ -128,96 +127,127 @@ export const useAuthState = (): AuthContextType => {
       console.log('✅ Authenticated user found:', user.id, user.email);
 
       try {
-        // Simplified profile fetch - just get the basic user profile first
-        const { data: userProfile, error: profileError } = await supabase
-          .from('user_profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (profileError) {
-          console.error('❌ Profile fetch error:', profileError);
-          setAuthState({ 
-            user: null,
-            loading: false, 
-            error: `Profile error: ${profileError.message}`,
-            currentWorkspaceId: null
-          });
-          return;
-        }
-
-        if (!userProfile) {
-          console.error('❌ No user profile found');
-          setAuthState({ 
-            user: null,
-            loading: false, 
-            error: 'User profile not found',
-            currentWorkspaceId: null
-          });
-          return;
-        }
-
-        console.log('✅ User profile loaded:', userProfile.email, 'Role:', userProfile.role);
-
-        // Fetch user's workspaces to ensure we have a valid workspace ID
-        const { data: workspaces } = await userService.getUserWorkspaces(user.id);
-        
-        // Get default workspace or first available workspace
-        const defaultWorkspaceId = userProfile.default_workspace_id;
-        const firstWorkspaceId = workspaces && workspaces.length > 0 ? workspaces[0].id : null;
-        const workspaceId = defaultWorkspaceId || firstWorkspaceId;
-
-        // Transform the profile data with minimal complexity
-        const transformedUser: UserProfile = {
-          id: userProfile.id,
-          email: userProfile.email || user.email || '',
-          firstName: userProfile.first_name || user.user_metadata?.first_name || 'User',
-          lastName: userProfile.last_name || user.user_metadata?.last_name || '',
-          role: userProfile.role || user.user_metadata?.role || 'member',
-          avatarUrl: userProfile.avatar_url || null,
-          isActive: userProfile.is_active !== false,
-          emailVerified: userProfile.email_verified || false,
-          failedLoginAttempts: userProfile.failed_login_attempts || 0,
-          lockedUntil: userProfile.locked_until || null,
-          lastLogin: userProfile.last_login || null,
-          lastActivity: userProfile.last_activity || null,
-          createdAt: userProfile.created_at || new Date().toISOString(),
-          updatedAt: userProfile.updated_at || new Date().toISOString(),
-          aiPreferences: userProfile.ai_preferences || {},
-          defaultWorkspaceId: userProfile.default_workspace_id || null,
-          permissions: [], // Load permissions separately if needed
-          memberships: workspaces ? workspaces.map(ws => ({
-            id: '',
-            userId: user.id,
-            workspaceId: ws.id,
-            role: 'member',
-            joinedAt: new Date().toISOString(),
-            workspace: ws
-          })) : []
-        };
-
-        setAuthState({ 
-          user: transformedUser, 
-          loading: false, 
-          error: null,
-          currentWorkspaceId: workspaceId
-        });
-
-        console.log('🎉 Auth state updated successfully!');
-      } catch (profileErr: any) {
-        console.error('❌ Profile processing error:', profileErr);
-        
-        // Fallback to metadata from auth user if profile fetch fails
-        const firstName = user.user_metadata?.first_name || user.user_metadata?.firstName || 'User';
-        const lastName = user.user_metadata?.last_name || user.user_metadata?.lastName || '';
+        // Get user metadata from auth
+        const firstName = user.user_metadata?.first_name || 'User';
+        const lastName = user.user_metadata?.last_name || '';
         const role = user.user_metadata?.role || 'member';
         
+        // Create a minimal user profile from auth data
+        const minimalUser: UserProfile = {
+          id: user.id,
+          email: user.email || '',
+          firstName,
+          lastName,
+          role,
+          isActive: true,
+          emailVerified: true,
+          failedLoginAttempts: 0,
+          createdAt: user.created_at || new Date().toISOString(),
+          updatedAt: user.updated_at || new Date().toISOString(),
+          aiPreferences: {},
+          permissions: [],
+          memberships: []
+        };
+        
+        // Try to get more detailed profile from database
+        try {
+          const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('id', user.id)
+            .single();
+          
+          if (userProfile) {
+            console.log('✅ User profile found in database');
+            // Update minimal profile with database data
+            minimalUser.firstName = userProfile.first_name || minimalUser.firstName;
+            minimalUser.lastName = userProfile.last_name || minimalUser.lastName;
+            minimalUser.role = userProfile.role || minimalUser.role;
+            minimalUser.avatarUrl = userProfile.avatar_url;
+            minimalUser.isActive = userProfile.is_active !== false;
+            minimalUser.emailVerified = userProfile.email_verified || false;
+            minimalUser.failedLoginAttempts = userProfile.failed_login_attempts || 0;
+            minimalUser.lockedUntil = userProfile.locked_until;
+            minimalUser.lastLogin = userProfile.last_login;
+            minimalUser.lastActivity = userProfile.last_activity;
+            minimalUser.defaultWorkspaceId = userProfile.default_workspace_id;
+          }
+        } catch (profileError) {
+          console.warn('⚠️ Error fetching user profile, using minimal profile:', profileError);
+        }
+        
+        // Try to get user's workspaces
+        try {
+          const { data: memberships } = await supabase
+            .from('memberships')
+            .select(`
+              id,
+              workspace_id,
+              role,
+              joined_at,
+              workspace:workspaces(
+                id,
+                name,
+                owner_id,
+                created_at
+              )
+            `)
+            .eq('user_id', user.id);
+          
+          if (memberships && memberships.length > 0) {
+            console.log('✅ User memberships found:', memberships.length);
+            minimalUser.memberships = memberships.map(m => ({
+              id: m.id,
+              userId: user.id,
+              workspaceId: m.workspace_id,
+              role: m.role,
+              joinedAt: m.joined_at,
+              workspace: m.workspace ? {
+                id: m.workspace.id,
+                name: m.workspace.name,
+                ownerId: m.workspace.owner_id,
+                createdAt: m.workspace.created_at
+              } : undefined
+            }));
+          }
+        } catch (membershipError) {
+          console.warn('⚠️ Error fetching memberships:', membershipError);
+        }
+        
+        // Determine current workspace ID
+        let currentWorkspaceId = null;
+        
+        // First try default workspace from profile
+        if (minimalUser.defaultWorkspaceId) {
+          currentWorkspaceId = minimalUser.defaultWorkspaceId;
+        } 
+        // Then try first workspace from memberships
+        else if (minimalUser.memberships && minimalUser.memberships.length > 0) {
+          currentWorkspaceId = minimalUser.memberships[0].workspaceId;
+        }
+        
+        console.log('✅ Setting current workspace ID:', currentWorkspaceId);
+        
+        // Update auth state with user profile and workspace
+        setAuthState({
+          user: minimalUser,
+          loading: false,
+          error: null,
+          currentWorkspaceId
+        });
+        
+        console.log('🎉 Auth state updated successfully!');
+        
+      } catch (err: any) {
+        console.error('❌ Error processing user data:', err);
+        
+        // Create a minimal fallback user profile
         const fallbackUser: UserProfile = {
           id: user.id,
           email: user.email || '',
-          firstName: firstName || 'User',
-          lastName: lastName || '',
-          role: role || 'member',
+          firstName: user.user_metadata?.first_name || 'User',
+          lastName: user.user_metadata?.last_name || '',
+          role: user.user_metadata?.role || 'member',
           isActive: true,
           emailVerified: true,
           failedLoginAttempts: 0,
@@ -234,10 +264,7 @@ export const useAuthState = (): AuthContextType => {
           error: null,
           currentWorkspaceId: null
         });
-        
-        console.log('⚠️ Using fallback user data from auth metadata');
       }
-
     } catch (err: any) {
       console.error('❌ User refresh error:', err);
       setAuthState({ 
@@ -381,7 +408,6 @@ export const useAuthState = (): AuthContextType => {
         });
       } else if (event === 'TOKEN_REFRESHED' && session?.user) {
         console.log('🔄 Token refreshed');
-        await refreshUser();
         // Don't refresh user on token refresh to avoid loops
       }
     });

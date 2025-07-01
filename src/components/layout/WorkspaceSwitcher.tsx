@@ -15,6 +15,8 @@ const WorkspaceSwitcher: React.FC = () => {
       fetchWorkspaces();
     } else {
       setWorkspaces([]);
+    } else {
+      setWorkspaces([]);
     }
   }, [authState.user]);
 
@@ -23,6 +25,12 @@ const WorkspaceSwitcher: React.FC = () => {
     try {
       const { data, error } = await userService.getUserWorkspaces();
       if (!error && data) {
+        setWorkspaces(data);
+      } else {
+        console.error('Error fetching workspaces:', error);
+      }
+    } catch (err) {
+      console.error('Exception fetching workspaces:', err);
         setWorkspaces(data);
       } else {
         console.error('Error fetching workspaces:', error);
@@ -44,6 +52,20 @@ const WorkspaceSwitcher: React.FC = () => {
   // Don't show for regular members unless they have multiple workspaces
   if (!authState.user || (authState.user?.role === 'member' && workspaces.length <= 1)) {
     return null;
+  }
+
+  // Show a simplified version while loading
+  if (loading) {
+    return (
+      <div className="flex items-center space-x-2 px-3 py-2 rounded-lg min-w-0">
+        <Building className="h-4 w-4 text-neutral-600 flex-shrink-0" />
+        <div className="flex-1 min-w-0 text-left">
+          <div className="text-sm font-medium text-neutral-900 truncate">
+            Loading workspaces...
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Show a simplified version while loading
